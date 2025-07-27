@@ -132,6 +132,7 @@ RunService.Heartbeat:Connect(function()
 						end)
 
 						-- Dagger right after first TP and look
+                                                task.delay(0.05)
 						daggerRemote:FireServer("UseActorAbility", "Dagger")
 					end
 				end)
