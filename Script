@@ -1,0 +1,102 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BackstabToggleGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = lp:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 150, 0, 40)
+toggleButton.Position = UDim2.new(0, 10, 0, 10)
+toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 20
+toggleButton.Text = "Backstab: OFF"
+toggleButton.Parent = screenGui
+
+-- Vars
+local enabled = false
+local cooldown = false
+local lastTarget = nil
+local daggerRemote = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Network"):WaitForChild("RemoteEvent")
+local killerNames = { "Jason", "c00lkidd", "JohnDoe", "1x1x1x1", "Noli" }
+local killersFolder = workspace:WaitForChild("Players"):WaitForChild("Killers")
+
+-- GUI toggle
+toggleButton.MouseButton1Click:Connect(function()
+	enabled = not enabled
+	toggleButton.Text = "Backstab: " .. (enabled and "ON" or "OFF")
+	toggleButton.BackgroundColor3 = enabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(30, 30, 30)
+end)
+
+-- Helper: Check if player is behind killer
+local function isBehindTarget(hrp, targetHRP)
+	local direction = -targetHRP.CFrame.LookVector
+	local toPlayer = (hrp.Position - targetHRP.Position)
+	local distance = toPlayer.Magnitude
+	local isBehind = toPlayer:Dot(direction) > 0.5
+	return distance <= 4 and isBehind
+end
+
+-- Main loop
+RunService.Heartbeat:Connect(function()
+	if not enabled or cooldown then return end
+
+	local char = lp.Character
+	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+	local hrp = char.HumanoidRootPart
+
+	for _, name in ipairs(killerNames) do
+		local killer = killersFolder:FindFirstChild(name)
+		if killer and killer:FindFirstChild("HumanoidRootPart") then
+			local kHRP = killer.HumanoidRootPart
+
+			if isBehindTarget(hrp, kHRP) and killer ~= lastTarget then
+				cooldown = true
+				lastTarget = killer
+
+				-- Fire Dagger once
+				daggerRemote:FireServer("UseActorAbility", "Dagger")
+
+				-- Track 1.3 seconds of constant behind teleporting
+				local start = tick()
+				local connection
+				connection = RunService.Heartbeat:Connect(function()
+					if not (char and char.Parent and kHRP and kHRP.Parent) then
+						if connection then connection:Disconnect() end
+						return
+					end
+					if tick() - start >= 1.3 then
+						if connection then connection:Disconnect() end
+						return
+					end
+
+					-- Keep teleporting behind the killer
+					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 2)
+					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
+				end)
+
+				-- Wait 1.3s then wait to leave range and apply 2s cooldown
+				task.delay(1, function()
+					-- Wait until player is no longer behind this killer
+					RunService.Heartbeat:Wait()
+					while isBehindTarget(hrp, kHRP) do
+						RunService.Heartbeat:Wait()
+					end
+					lastTarget = nil
+
+					-- Enforce 2s cooldown
+					task.wait(2)
+					cooldown = false
+				end)
+
+				break
+			end
+		end
+	end
+end)
