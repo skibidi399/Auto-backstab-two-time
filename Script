@@ -96,7 +96,7 @@ RunService.Heartbeat:Connect(function()
 				cooldown = true
 				lastTarget = killer
 
-				-- Begin 0.7 constant teleporting behind killer
+				-- Begin 1.3s constant teleporting behind killer
 				local start = tick()
 				local didDagger = false
 
@@ -107,7 +107,7 @@ RunService.Heartbeat:Connect(function()
 						return
 					end
 					local elapsed = tick() - start
-					if elapsed >= 0.7 then
+					if elapsed >= 1.3 then
 						if connection then connection:Disconnect() end
 						return
 					end
@@ -116,15 +116,15 @@ RunService.Heartbeat:Connect(function()
 					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 2)
 					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
 
-					-- Align look direction for sum secs (only once at the start)
+					-- Align look direction for 2.5s (only once at the start)
 					if not didDagger then
 						didDagger = true
 
-						-- Align to killer’s facing for sum secs
+						-- Align to killer’s facing for 2.5s
 						local faceStart = tick()
 						local faceConn
 						faceConn = RunService.Heartbeat:Connect(function()
-							if tick() - faceStart >= 1.3 or not kHRP or not kHRP.Parent then
+							if tick() - faceStart >= 2.5 or not kHRP or not kHRP.Parent then
 								if faceConn then faceConn:Disconnect() end
 								return
 							end
