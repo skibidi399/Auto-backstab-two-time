@@ -60,10 +60,14 @@ RunService.Heartbeat:Connect(function()
 				cooldown = true
 				lastTarget = killer
 
-				-- Fire Dagger once
+				-- Immediately TP and look
+				local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 2)
+				hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
+
+				-- Fire dagger instantly on first TP+look
 				daggerRemote:FireServer("UseActorAbility", "Dagger")
 
-				-- Track 1.3 seconds of constant behind teleporting
+				-- Continue to follow for 1.3s
 				local start = tick()
 				local connection
 				connection = RunService.Heartbeat:Connect(function()
@@ -71,28 +75,20 @@ RunService.Heartbeat:Connect(function()
 						if connection then connection:Disconnect() end
 						return
 					end
-					if tick() - start >= 1.3 then
+					if tick() - start >= 0.7 then
 						if connection then connection:Disconnect() end
+
+						-- Start cooldown
+						task.delay(2, function()
+							cooldown = false
+							lastTarget = nil
+						end)
 						return
 					end
 
-					-- Keep teleporting behind the killer
-					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 2)
-					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
-				end)
-
-				-- Wait 1.3s then wait to leave range and apply 2s cooldown
-				task.delay(1, function()
-					-- Wait until player is no longer behind this killer
-					RunService.Heartbeat:Wait()
-					while isBehindTarget(hrp, kHRP) do
-						RunService.Heartbeat:Wait()
-					end
-					lastTarget = nil
-
-					-- Enforce 2s cooldown
-					task.wait(2)
-					cooldown = false
+					-- Maintain position behind killer
+					local behind = kHRP.Position - (kHRP.CFrame.LookVector * 2)
+					hrp.CFrame = CFrame.new(behind, behind + kHRP.CFrame.LookVector)
 				end)
 
 				break
