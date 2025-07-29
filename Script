@@ -107,7 +107,7 @@ RunService.Heartbeat:Connect(function()
 						return
 					end
 					local elapsed = tick() - start
-					if elapsed >= 1.1 then
+					if elapsed >= 0.5 then
 						if connection then connection:Disconnect() end
 						return
 					end
@@ -124,7 +124,7 @@ RunService.Heartbeat:Connect(function()
 						local faceStart = tick()
 						local faceConn
 						faceConn = RunService.Heartbeat:Connect(function()
-							if tick() - faceStart >= 1.3 or not kHRP or not kHRP.Parent then
+							if tick() - faceStart >= 0.7 or not kHRP or not kHRP.Parent then
 								if faceConn then faceConn:Disconnect() end
 								return
 							end
