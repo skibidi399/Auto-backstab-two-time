@@ -96,7 +96,7 @@ RunService.Heartbeat:Connect(function()
 				cooldown = true
 				lastTarget = killer
 
-				-- Begin 1.1s constant teleporting behind killer
+				-- Begin sum secs constant teleporting behind killer
 				local start = tick()
 				local didDagger = false
 
@@ -113,7 +113,7 @@ RunService.Heartbeat:Connect(function()
 					end
 
 					-- Constant TP behind killer
-					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 2)
+					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
 					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
 
 					-- Align look direction for sum sec (only once at the start)
