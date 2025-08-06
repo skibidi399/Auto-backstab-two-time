@@ -99,7 +99,30 @@ rangeBox.FocusLost:Connect(function()
 	end
 end)
 
--- Helper: Check if player is in range
+-- Helpers
+
+-- Fling to killer and return in same frame
+local function flingToKillerBackAndReturn(char, targetHRP)
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp or not targetHRP then return end
+
+	local originalPosition = hrp.Position
+	local originalVelocity = hrp.Velocity
+
+	local backDirection = -targetHRP.CFrame.LookVector
+	local flingVelocity = backDirection * 120
+
+	-- Apply velocity
+	hrp.Velocity = flingVelocity
+
+	-- Wait 1 physics frame
+	RunService.Heartbeat:Wait()
+
+	-- Restore position and velocity
+	hrp.CFrame = CFrame.new(originalPosition)
+	hrp.Velocity = originalVelocity
+end
+
 local function isInRange(hrp, targetHRP)
 	local toPlayer = (hrp.Position - targetHRP.Position)
 	local distance = toPlayer.Magnitude
@@ -117,73 +140,54 @@ end
 
 -- Main loop
 RunService.Heartbeat:Connect(function()
-	if not enabled or cooldown then return end
+	if not isActive then return end
 
-	local char = lp.Character
-	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+	local char = LocalPlayer.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
 	local hrp = char.HumanoidRootPart
+	local nearest, distance = getNearestKiller(range)
 
-	for _, name in ipairs(killerNames) do
-		local killer = killersFolder:FindFirstChild(name)
-		if killer and killer:FindFirstChild("HumanoidRootPart") then
-			local kHRP = killer.HumanoidRootPart
+	if nearest and distance then
+		local kHRP = nearest:FindFirstChild("HumanoidRootPart")
+		if not kHRP then return end
 
-			if isInRange(hrp, kHRP) and killer ~= lastTarget then
-				cooldown = true
-				lastTarget = killer
+		local targetCFrame
 
-				-- Begin sum secs constant teleporting behind killer
-				local start = tick()
-				local didDagger = false
+		if rangeMode == "Circle" or rangeMode == "Behind" then
+			local behind = kHRP.CFrame * CFrame.new(0, 0, -2.5)
+			targetCFrame = CFrame.new(behind.Position, kHRP.Position)
+		elseif rangeMode == "Line" then
+			targetCFrame = CFrame.new(kHRP.Position + kHRP.CFrame.LookVector * -2, kHRP.Position)
+		else
+			targetCFrame = hrp.CFrame
+		end
 
-				local connection
-				connection = RunService.Heartbeat:Connect(function()
-					if not (char and char.Parent and kHRP and kHRP.Parent) then
-						if connection then connection:Disconnect() end
-						return
-					end
-					local elapsed = tick() - start
-					if elapsed >= 0.5 then
-						if connection then connection:Disconnect() end
-						return
-					end
+		-- Teleport to killer's back
+		hrp.CFrame = targetCFrame
+		hrp.Velocity = Vector3.zero
 
-					-- Constant TP behind killer
-					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
-					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
+		-- Face toward killer again
+		hrp.CFrame = CFrame.new(hrp.Position, kHRP.Position)
 
-					-- Align look direction for sum sec (only once at the start)
-					if not didDagger then
-						didDagger = true
+		if not didDagger then
+			didDagger = true
 
-						-- Align to killer’s facing for sum sec
-						local faceStart = tick()
-						local faceConn
-						faceConn = RunService.Heartbeat:Connect(function()
-							if tick() - faceStart >= 0.7 or not kHRP or not kHRP.Parent then
-								if faceConn then faceConn:Disconnect() end
-								return
-							end
-							hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + kHRP.CFrame.LookVector)
-						end)
+			-- Trigger dagger
+			daggerRemote:FireServer("UseActorAbility", "Dagger")
 
-						-- Dagger right after first TP and look
-						daggerRemote:FireServer("UseActorAbility", "Dagger")
-					end
-				end)
-
-				-- Wait and reset cooldown after leaving range
-				task.delay(2, function()
-					RunService.Heartbeat:Wait()
-					while isInRange(hrp, kHRP) do
-						RunService.Heartbeat:Wait()
-					end
-					lastTarget = nil
-					cooldown = false
-				end)
-
-				break
+			-- Fling for 1 frame after dagger
+			if rangeMode == "Circle" then
+				flingToKillerBackAndReturn(char, kHRP)
 			end
+
+			-- Reset back
+			task.delay(0.1, function()
+				local originalPos = storedPos or Vector3.zero
+				hrp.CFrame = CFrame.new(originalPos)
+				hrp.Velocity = Vector3.zero
+				didDagger = false
+			end)
 		end
 	end
 end)
