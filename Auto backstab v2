@@ -140,54 +140,52 @@ end
 
 -- Main loop
 RunService.Heartbeat:Connect(function()
-	if not isActive then return end
+	if not enabled or cooldown then return end
 
-	local char = LocalPlayer.Character
-	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-
+	local char = lp.Character
+	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
 	local hrp = char.HumanoidRootPart
-	local nearest, distance = getNearestKiller(range)
 
-	if nearest and distance then
-		local kHRP = nearest:FindFirstChild("HumanoidRootPart")
-		if not kHRP then return end
+	for _, name in ipairs(killerNames) do
+		local killer = killersFolder:FindFirstChild(name)
+		if killer and killer:FindFirstChild("HumanoidRootPart") then
+			local kHRP = killer.HumanoidRootPart
 
-		local targetCFrame
+			if isInRange(hrp, kHRP) and killer ~= lastTarget then
+				cooldown = true
+				lastTarget = killer
 
-		if rangeMode == "Circle" or rangeMode == "Behind" then
-			local behind = kHRP.CFrame * CFrame.new(0, 0, -2.5)
-			targetCFrame = CFrame.new(behind.Position, kHRP.Position)
-		elseif rangeMode == "Line" then
-			targetCFrame = CFrame.new(kHRP.Position + kHRP.CFrame.LookVector * -2, kHRP.Position)
-		else
-			targetCFrame = hrp.CFrame
-		end
+				-- Store original position & velocity
+				local originalPosition = hrp.Position
+				local originalVelocity = hrp.Velocity
 
-		-- Teleport to killer's back
-		hrp.CFrame = targetCFrame
-		hrp.Velocity = Vector3.zero
+				-- Teleport behind the killer
+				local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
+				hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
 
-		-- Face toward killer again
-		hrp.CFrame = CFrame.new(hrp.Position, kHRP.Position)
+				-- Fire dagger
+				daggerRemote:FireServer("UseActorAbility", "Dagger")
+                                wait(0.01)
+				-- Fling velocity backwards for 1 frame
+				local flingVelocity = -kHRP.CFrame.LookVector * 120
+				hrp.Velocity = flingVelocity
 
-		if not didDagger then
-			didDagger = true
+				-- Wait 1 frame, then restore position/velocity
+				RunService.Heartbeat:Wait()
+				hrp.CFrame = CFrame.new(originalPosition)
+				hrp.Velocity = originalVelocity
 
-			-- Trigger dagger
-			daggerRemote:FireServer("UseActorAbility", "Dagger")
+				-- Start cooldown reset logic
+				task.delay(2, function()
+					while isInRange(hrp, kHRP) do
+						RunService.Heartbeat:Wait()
+					end
+					lastTarget = nil
+					cooldown = false
+				end)
 
-			-- Fling for 1 frame after dagger
-			if rangeMode == "Circle" then
-				flingToKillerBackAndReturn(char, kHRP)
+				break
 			end
-
-			-- Reset back
-			task.delay(0.1, function()
-				local originalPos = storedPos or Vector3.zero
-				hrp.CFrame = CFrame.new(originalPos)
-				hrp.Velocity = Vector3.zero
-				didDagger = false
-			end)
 		end
 	end
 end)
