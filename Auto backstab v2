@@ -104,86 +104,113 @@ local function isBehindTarget(hrp, targetHRP)
     end
 end
 
--- Main loop 
-RunService.Heartbeat:Connect(function() 
-    if not enabled or cooldown then return end
-    local char = lp.Character 
-    if not (char and char:FindFirstChild("HumanoidRootPart")) then return end 
-    local hrp = char.HumanoidRootPart 
-    local stats = game:GetService("Stats")
+-- Main loop
+RunService.Heartbeat:Connect(function()
+	if not enabled or cooldown then return end
 
-    for _, name in ipairs(killerNames) do 
-        local killer = killersFolder:FindFirstChild(name) 
-        if killer and killer:FindFirstChild("HumanoidRootPart") then 
-            local kHRP = killer.HumanoidRootPart
-            if isBehindTarget(hrp, kHRP) and killer ~= lastTarget then 
-                cooldown = true 
-                lastTarget = killer
+	local char = lp.Character
+	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+	local hrp = char.HumanoidRootPart
+	local stats = game:GetService("Stats")
 
-                local start = tick() 
-                local didDagger = false
+	for _, name in ipairs(killerNames) do
+		local killer = killersFolder:FindFirstChild(name)
+		if killer and killer:FindFirstChild("HumanoidRootPart") then
+			local kHRP = killer.HumanoidRootPart
 
-                local connection 
-                connection = RunService.Heartbeat:Connect(function() 
-                    if not (char and char.Parent and kHRP and kHRP.Parent) then 
-                        if connection then connection:Disconnect() end 
-                        return 
-                    end
+			if isBehindTarget(hrp, kHRP) and killer ~= lastTarget then
+				cooldown = true
+				lastTarget = killer
 
-                    local elapsed = tick() - start 
-                    if elapsed >= 0.5 then 
-                        if connection then connection:Disconnect() end 
-                        return 
-                    end
+				local start = tick()
+				local didDagger = false
+				local connection
+				connection = RunService.Heartbeat:Connect(function()
+					if not (char and char.Parent and kHRP and kHRP.Parent) then
+						if connection then connection:Disconnect() end
+						return
+					end
 
-                    -- Prediction
-                    local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50 
-                    local pingSeconds = ping / 1000 
-                    local killerMoveSpeed = 16 
-                    local pingOffset = killerMoveSpeed * pingSeconds
+					local elapsed = tick() - start
+					if elapsed >= 0.5 then
+						if connection then connection:Disconnect() end
+						return
+					end
 
-                    local killerVelocity = kHRP.Velocity 
-                    local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new() 
-                    local predictedPos = kHRP.Position + (moveDir * pingOffset)
+					-- LIVE Ping + velocity prediction
+					local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
+					local pingSeconds = ping / 1000
+					local killerVelocity = kHRP.Velocity
+					local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new()
+					local pingOffset = moveDir * (pingSeconds * killerVelocity.Magnitude)
+					local predictedPos = kHRP.Position + pingOffset
 
-                    local targetPos 
-                    if mode == "Behind" then 
-                        targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3) 
-                    else 
-                        targetPos = predictedPos 
-                    end
+					-- Apply mode logic with improved "Around" handling
+					local targetPos
+					if mode == "Behind" then
+						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
+					elseif mode == "Around" then
+						local rel = (hrp.Position - kHRP.Position)
+						if rel.Magnitude > 0.1 then
+							targetPos = predictedPos + rel.Unit * 0.3
+						else
+							targetPos = predictedPos
+						end
+					end
 
-                    hrp.CFrame = CFrame.new(targetPos, targetPos + kHRP.CFrame.LookVector)
+					-- Constant live TP
+					hrp.CFrame = CFrame.new(targetPos, targetPos + kHRP.CFrame.LookVector)
 
-                    if not didDagger then 
-                        didDagger = true
-                        local faceStart = tick() 
-                        local faceConn 
-                        faceConn = RunService.Heartbeat:Connect(function() 
-                            if tick() - faceStart >= 0.7 or not kHRP or not kHRP.Parent then 
-                                if faceConn then faceConn:Disconnect() end 
-                                return 
-                            end
-                            local livePredictedPos = kHRP.Position + (moveDir * pingOffset) 
-                            local liveTargetPos = (mode == "Behind") 
-                                and (livePredictedPos - (kHRP.CFrame.LookVector * 0.3)) 
-                                or livePredictedPos 
-                            hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector) 
-                        end)
-                        daggerRemote:FireServer("UseActorAbility", "Dagger") 
-                    end
-                end)
+					-- Only dagger once
+					if not didDagger then
+						didDagger = true
 
-                task.delay(2, function() 
-                    RunService.Heartbeat:Wait() 
-                    while isBehindTarget(hrp, kHRP) do 
-                        RunService.Heartbeat:Wait() 
-                    end 
-                    lastTarget = nil 
-                    cooldown = false 
-                end)
-                break
-            end
-        end
-    end
+						-- Keep aligning for 0.7s
+						local faceStart = tick()
+						local faceConn
+						faceConn = RunService.Heartbeat:Connect(function()
+							if tick() - faceStart >= 0.7 or not kHRP or not kHRP.Parent then
+								if faceConn then faceConn:Disconnect() end
+								return
+							end
+							-- Live align during window
+							local livePing = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
+							local livePingSeconds = livePing / 1000
+							local liveVelocity = kHRP.Velocity
+							local liveMoveDir = liveVelocity.Magnitude > 0.1 and liveVelocity.Unit or Vector3.new()
+							local livePingOffset = liveMoveDir * (livePingSeconds * liveVelocity.Magnitude)
+							local livePredictedPos = kHRP.Position + livePingOffset
+
+							local liveTargetPos
+							if mode == "Behind" then
+								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * 0.3)
+							elseif mode == "Around" then
+								local liveRel = (hrp.Position - kHRP.Position)
+								if liveRel.Magnitude > 0.1 then
+									liveTargetPos = livePredictedPos + liveRel.Unit * 0.3
+								else
+									liveTargetPos = livePredictedPos
+								end
+							end
+							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
+						end)
+
+						daggerRemote:FireServer("UseActorAbility", "Dagger")
+					end
+				end)
+
+				-- Reset cooldown when out of range
+				task.delay(2, function()
+					RunService.Heartbeat:Wait()
+					while isBehindTarget(hrp, kHRP) do
+						RunService.Heartbeat:Wait()
+					end
+					lastTarget = nil
+					cooldown = false
+				end)
+
+				break
+			end
+		end
+	end
 end)
