@@ -71,7 +71,7 @@ rangeBox.FocusLost:Connect(function()
 end)
 
 -- Mode Toggle 
-local mode = "Behind" 
+local mode = "Around" 
 local modeButton = Instance.new("TextButton") 
 modeButton.Size = UDim2.new(0, 150, 0, 25) 
 modeButton.Position = UDim2.new(0, 10, 0, 105) 
@@ -79,7 +79,7 @@ modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 modeButton.TextColor3 = Color3.fromRGB(255, 255, 255) 
 modeButton.Font = Enum.Font.SourceSans 
 modeButton.TextSize = 16 
-modeButton.Text = "Mode: Behind" 
+modeButton.Text = "Range: Around" 
 modeButton.Parent = screenGui
 
 modeButton.MouseButton1Click:Connect(function() 
@@ -105,7 +105,7 @@ local function isBehindTarget(hrp, targetHRP)
 end
 
 -- Main loop
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
 	if not enabled or cooldown then return end
 
 	local char = lp.Character
@@ -150,12 +150,15 @@ RunService.Heartbeat:Connect(function()
 					if mode == "Behind" then
 						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
 					elseif mode == "Around" then
+						local lookVec = kHRP.CFrame.LookVector
+						local rightVec = kHRP.CFrame.RightVector
 						local rel = (hrp.Position - kHRP.Position)
-						if rel.Magnitude > 0.1 then
-							targetPos = predictedPos + rel.Unit * 0.3
-						else
-							targetPos = predictedPos
-						end
+						local lateralSpeed = killerVelocity:Dot(rightVec)
+						
+						local baseOffset = (rel.Magnitude > 0.1) and rel.Unit * 0.3 or Vector3.new()
+						local lateralOffset = rightVec * lateralSpeed * 0.3
+
+						targetPos = predictedPos + baseOffset + lateralOffset
 					end
 
 					-- Constant live TP
@@ -185,12 +188,15 @@ RunService.Heartbeat:Connect(function()
 							if mode == "Behind" then
 								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * 0.3)
 							elseif mode == "Around" then
+								local lookVec = kHRP.CFrame.LookVector
+								local rightVec = kHRP.CFrame.RightVector
 								local liveRel = (hrp.Position - kHRP.Position)
-								if liveRel.Magnitude > 0.1 then
-									liveTargetPos = livePredictedPos + liveRel.Unit * 0.3
-								else
-									liveTargetPos = livePredictedPos
-								end
+								local liveLateralSpeed = liveVelocity:Dot(rightVec)
+								
+								local baseOffset = (liveRel.Magnitude > 0.1) and liveRel.Unit * 0.3 or Vector3.new()
+								local lateralOffset = rightVec * liveLateralSpeed * 0.3
+
+								liveTargetPos = livePredictedPos + baseOffset + lateralOffset
 							end
 							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
