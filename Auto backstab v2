@@ -134,37 +134,39 @@ RunService.Heartbeat:Connect(function()
 						if connection then connection:Disconnect() end
 						return
 					end
+
 					local elapsed = tick() - start
 					if elapsed >= 0.5 then
 						if connection then connection:Disconnect() end
 						return
 					end
 
-					-- Ping-based prediction
+					-- LIVE Ping + velocity prediction
 					local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
 					local pingSeconds = ping / 1000
-					local killerMoveSpeed = 16 -- adjust if killers move faster
+					local killerMoveSpeed = 16 -- studs/sec, adjust if killers move faster
 					local pingOffset = killerMoveSpeed * pingSeconds
 
 					local killerVelocity = kHRP.Velocity
 					local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new()
 					local predictedPos = kHRP.Position + (moveDir * pingOffset)
 
-					-- Mode-adjusted position
+					-- Apply mode logic
 					local targetPos
 					if mode == "Behind" then
 						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
-					else -- Around mode
+					else
 						targetPos = predictedPos
 					end
 
-					-- TP to adjusted position facing killer's direction
+					-- Constant live TP
 					hrp.CFrame = CFrame.new(targetPos, targetPos + kHRP.CFrame.LookVector)
 
-					-- Align & dagger once
+					-- Only dagger once
 					if not didDagger then
 						didDagger = true
 
+						-- Keep aligning for 0.7s
 						local faceStart = tick()
 						local faceConn
 						faceConn = RunService.Heartbeat:Connect(function()
@@ -172,14 +174,19 @@ RunService.Heartbeat:Connect(function()
 								if faceConn then faceConn:Disconnect() end
 								return
 							end
-							hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + kHRP.CFrame.LookVector)
+							-- Live align during window
+							local livePredictedPos = kHRP.Position + (moveDir * pingOffset)
+							local liveTargetPos = (mode == "Behind")
+								and (livePredictedPos - (kHRP.CFrame.LookVector * 0.3))
+								or livePredictedPos
+							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
 
 						daggerRemote:FireServer("UseActorAbility", "Dagger")
 					end
 				end)
 
-				-- Reset cooldown after target leaves range
+				-- Reset cooldown when out of range
 				task.delay(2, function()
 					RunService.Heartbeat:Wait()
 					while isBehindTarget(hrp, kHRP) do
