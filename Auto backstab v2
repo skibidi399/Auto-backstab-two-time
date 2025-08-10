@@ -108,6 +108,7 @@ local function isBehindTarget(hrp, targetHRP)
 end
 
 -- Main loop
+-- Main loop
 RunService.Heartbeat:Connect(function()
 	if not enabled or cooldown then return end
 
@@ -127,7 +128,6 @@ RunService.Heartbeat:Connect(function()
 
 				local start = tick()
 				local didDagger = false
-
 				local connection
 				connection = RunService.Heartbeat:Connect(function()
 					if not (char and char.Parent and kHRP and kHRP.Parent) then
@@ -144,19 +144,22 @@ RunService.Heartbeat:Connect(function()
 					-- LIVE Ping + velocity prediction
 					local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
 					local pingSeconds = ping / 1000
-					local killerMoveSpeed = 16 -- studs/sec, adjust if killers move faster
-					local pingOffset = killerMoveSpeed * pingSeconds
-
 					local killerVelocity = kHRP.Velocity
 					local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new()
-					local predictedPos = kHRP.Position + (moveDir * pingOffset)
+					local pingOffset = moveDir * (pingSeconds * killerVelocity.Magnitude)
+					local predictedPos = kHRP.Position + pingOffset
 
-					-- Apply mode logic
+					-- Apply mode logic with improved "Around" handling
 					local targetPos
 					if mode == "Behind" then
 						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
-					else
-						targetPos = predictedPos
+					elseif mode == "Around" then
+						local rel = (hrp.Position - kHRP.Position)
+						if rel.Magnitude > 0.1 then
+							targetPos = predictedPos + rel.Unit * 0.3
+						else
+							targetPos = predictedPos
+						end
 					end
 
 					-- Constant live TP
@@ -175,10 +178,24 @@ RunService.Heartbeat:Connect(function()
 								return
 							end
 							-- Live align during window
-							local livePredictedPos = kHRP.Position + (moveDir * pingOffset)
-							local liveTargetPos = (mode == "Behind")
-								and (livePredictedPos - (kHRP.CFrame.LookVector * 0.3))
-								or livePredictedPos
+							local livePing = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
+							local livePingSeconds = livePing / 1000
+							local liveVelocity = kHRP.Velocity
+							local liveMoveDir = liveVelocity.Magnitude > 0.1 and liveVelocity.Unit or Vector3.new()
+							local livePingOffset = liveMoveDir * (livePingSeconds * liveVelocity.Magnitude)
+							local livePredictedPos = kHRP.Position + livePingOffset
+
+							local liveTargetPos
+							if mode == "Behind" then
+								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * 0.3)
+							elseif mode == "Around" then
+								local liveRel = (hrp.Position - kHRP.Position)
+								if liveRel.Magnitude > 0.1 then
+									liveTargetPos = livePredictedPos + liveRel.Unit * 0.3
+								else
+									liveTargetPos = livePredictedPos
+								end
+							end
 							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
 
