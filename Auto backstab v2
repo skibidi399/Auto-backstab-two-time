@@ -107,8 +107,7 @@ local function isBehindTarget(hrp, targetHRP)
 	end
 end
 
--- Main loop
--- Main loop
+-- Main loop (ping-safe, strafing-safe, handles stopped killers)
 RunService.Heartbeat:Connect(function()
 	if not enabled or cooldown then return end
 
@@ -144,32 +143,47 @@ RunService.Heartbeat:Connect(function()
 					-- LIVE Ping + velocity prediction
 					local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
 					local pingSeconds = ping / 1000
-					local killerVelocity = kHRP.Velocity
-					local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new()
-					local pingOffset = moveDir * (pingSeconds * killerVelocity.Magnitude)
-					local predictedPos = kHRP.Position + pingOffset
 
-					-- Apply mode logic with improved "Around" handling
+					-- predicted position using velocity (simple linear prediction)
+					local predictedPos = kHRP.Position + (kHRP.Velocity * pingSeconds)
+
+					-- BACK OFFSET: base + ping-scaled portion
+					-- base ensures a minimum behind distance even if target stops
+					local baseBack = 0.3
+					local pingScale = 4 -- studs per second of pingSeconds (tweakable)
+					local pingBack = math.clamp(pingSeconds * pingScale, 0, 3) -- avoid huge offsets
+					local backOffset = baseBack + pingBack
+
+					-- Choose target position depending on mode
 					local targetPos
 					if mode == "Behind" then
-						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
+						-- Always offset behind using LookVector (strafing-safe)
+						targetPos = predictedPos - (kHRP.CFrame.LookVector * backOffset)
 					elseif mode == "Around" then
-						local rel = (hrp.Position - kHRP.Position)
-						if rel.Magnitude > 0.1 then
-							targetPos = predictedPos + rel.Unit * 0.3
+						-- Keep your current relative bearing if it's meaningful,
+						-- otherwise fallback to a safe behind position.
+						local rel = hrp.Position - kHRP.Position
+						if rel.Magnitude > 0.5 then
+							-- preserve circle radius but clamp it so it's not too tiny or huge
+							local radius = math.clamp(rel.Magnitude, 0.3, math.max(range, 3))
+							targetPos = predictedPos + rel.Unit * radius
 						else
-							targetPos = predictedPos
+							-- fallback to behind so we don't accidentally appear in front
+							targetPos = predictedPos - (kHRP.CFrame.LookVector * backOffset)
 						end
+					else
+						-- default safety
+						targetPos = predictedPos - (kHRP.CFrame.LookVector * backOffset)
 					end
 
-					-- Constant live TP
+					-- Constant live TP (heartbeat)
 					hrp.CFrame = CFrame.new(targetPos, targetPos + kHRP.CFrame.LookVector)
 
-					-- Only dagger once
+					-- Only dagger once (but keep live-aligning)
 					if not didDagger then
 						didDagger = true
 
-						-- Keep aligning for 0.7s
+						-- Keep aligning for 0.7s with live ping/velocity recalculation
 						local faceStart = tick()
 						local faceConn
 						faceConn = RunService.Heartbeat:Connect(function()
@@ -177,29 +191,35 @@ RunService.Heartbeat:Connect(function()
 								if faceConn then faceConn:Disconnect() end
 								return
 							end
-							-- Live align during window
+
 							local livePing = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
 							local livePingSeconds = livePing / 1000
-							local liveVelocity = kHRP.Velocity
-							local liveMoveDir = liveVelocity.Magnitude > 0.1 and liveVelocity.Unit or Vector3.new()
-							local livePingOffset = liveMoveDir * (livePingSeconds * liveVelocity.Magnitude)
-							local livePredictedPos = kHRP.Position + livePingOffset
+							local livePredictedPos = kHRP.Position + (kHRP.Velocity * livePingSeconds)
+
+							local liveBaseBack = 0.3
+							local livePingBack = math.clamp(livePingSeconds * pingScale, 0, 3)
+							local liveBackOffset = liveBaseBack + livePingBack
 
 							local liveTargetPos
 							if mode == "Behind" then
-								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * 0.3)
+								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * liveBackOffset)
 							elseif mode == "Around" then
-								local liveRel = (hrp.Position - kHRP.Position)
-								if liveRel.Magnitude > 0.1 then
-									liveTargetPos = livePredictedPos + liveRel.Unit * 0.3
+								local liveRel = hrp.Position - kHRP.Position
+								if liveRel.Magnitude > 0.5 then
+									local liveRadius = math.clamp(liveRel.Magnitude, 0.3, math.max(range, 3))
+									liveTargetPos = livePredictedPos + liveRel.Unit * liveRadius
 								else
-									liveTargetPos = livePredictedPos
+									liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * liveBackOffset)
 								end
+							else
+								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * liveBackOffset)
 							end
+                            game.Players.LocalPlayer.Character:WaitForChild("Humanoid").AutoRotate = false
 							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
-
 						daggerRemote:FireServer("UseActorAbility", "Dagger")
+                        task.wait(0.03)
+                        game.Players.LocalPlayer.Character:WaitForChild("Humanoid").AutoRotate = true
 					end
 				end)
 
