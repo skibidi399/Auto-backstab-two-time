@@ -214,12 +214,9 @@ RunService.Heartbeat:Connect(function()
 							else
 								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * liveBackOffset)
 							end
-                            game.Players.LocalPlayer.Character:WaitForChild("Humanoid").AutoRotate = false
 							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
 						daggerRemote:FireServer("UseActorAbility", "Dagger")
-                        task.wait(0.03)
-                        game.Players.LocalPlayer.Character:WaitForChild("Humanoid").AutoRotate = true
 					end
 				end)
 
