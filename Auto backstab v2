@@ -39,7 +39,7 @@ rangeBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 rangeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 rangeBox.Font = Enum.Font.SourceSans
 rangeBox.TextSize = 16
-rangeBox.PlaceholderText = "Enter range (1 - 10)"
+rangeBox.PlaceholderText = "Enter range (number)"
 rangeBox.Text = "4"
 rangeBox.ClearTextOnFocus = false
 rangeBox.Parent = screenGui
@@ -62,12 +62,12 @@ end)
 
 -- TextBox Range Handling
 rangeBox.FocusLost:Connect(function()
-	local input = tonumber(rangeBox.Text)
-	if input and input >= 1 and input <= 10 then
-		range = input
-	else
-		rangeBox.Text = tostring(range) -- Revert to last valid value
-	end
+    local input = tonumber(rangeBox.Text)
+    if input and input >= 1 then
+        range = input
+    else
+        rangeBox.Text = tostring(range) -- revert if invalid
+    end
 end)
 
 -- Mode Toggle
