@@ -114,6 +114,7 @@ RunService.Heartbeat:Connect(function()
 	local char = lp.Character
 	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
 	local hrp = char.HumanoidRootPart
+	local stats = game:GetService("Stats")
 
 	for _, name in ipairs(killerNames) do
 		local killer = killersFolder:FindFirstChild(name)
@@ -124,7 +125,6 @@ RunService.Heartbeat:Connect(function()
 				cooldown = true
 				lastTarget = killer
 
-				-- Begin sum secs constant teleporting behind killer
 				local start = tick()
 				local didDagger = false
 
@@ -140,15 +140,31 @@ RunService.Heartbeat:Connect(function()
 						return
 					end
 
-					-- Constant TP behind killer
-					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
-					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
+					-- Ping-based prediction
+					local ping = tonumber(stats.Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+")) or 50
+					local pingSeconds = ping / 1000
+					local killerMoveSpeed = 16 -- adjust if killers move faster
+					local pingOffset = killerMoveSpeed * pingSeconds
 
-					-- Align look direction for sum sec (only once at the start)
+					local killerVelocity = kHRP.Velocity
+					local moveDir = killerVelocity.Magnitude > 0.1 and killerVelocity.Unit or Vector3.new()
+					local predictedPos = kHRP.Position + (moveDir * pingOffset)
+
+					-- Mode-adjusted position
+					local targetPos
+					if mode == "Behind" then
+						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
+					else -- Around mode
+						targetPos = predictedPos
+					end
+
+					-- TP to adjusted position facing killer's direction
+					hrp.CFrame = CFrame.new(targetPos, targetPos + kHRP.CFrame.LookVector)
+
+					-- Align & dagger once
 					if not didDagger then
 						didDagger = true
 
-						-- Align to killer’s facing for sum sec
 						local faceStart = tick()
 						local faceConn
 						faceConn = RunService.Heartbeat:Connect(function()
@@ -159,12 +175,11 @@ RunService.Heartbeat:Connect(function()
 							hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + kHRP.CFrame.LookVector)
 						end)
 
-						-- Dagger right after first TP and look
 						daggerRemote:FireServer("UseActorAbility", "Dagger")
 					end
 				end)
 
-				-- Wait and reset cooldown after leaving range
+				-- Reset cooldown after target leaves range
 				task.delay(2, function()
 					RunService.Heartbeat:Wait()
 					while isBehindTarget(hrp, kHRP) do
