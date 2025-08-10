@@ -71,7 +71,7 @@ rangeBox.FocusLost:Connect(function()
 end)
 
 -- Mode Toggle 
-local mode = "Around" 
+local mode = "Behind" 
 local modeButton = Instance.new("TextButton") 
 modeButton.Size = UDim2.new(0, 150, 0, 25) 
 modeButton.Position = UDim2.new(0, 10, 0, 105) 
@@ -79,7 +79,7 @@ modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 modeButton.TextColor3 = Color3.fromRGB(255, 255, 255) 
 modeButton.Font = Enum.Font.SourceSans 
 modeButton.TextSize = 16 
-modeButton.Text = "Range: Around" 
+modeButton.Text = "Mode: Behind" 
 modeButton.Parent = screenGui
 
 modeButton.MouseButton1Click:Connect(function() 
