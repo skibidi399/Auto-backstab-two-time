@@ -44,35 +44,6 @@ rangeBox.Text = "4"
 rangeBox.ClearTextOnFocus = false
 rangeBox.Parent = screenGui
 
--- Range Mode Label
-local modeLabel = Instance.new("TextLabel")
-modeLabel.Size = UDim2.new(0, 150, 0, 20)
-modeLabel.Position = UDim2.new(0, 10, 0, 105)
-modeLabel.BackgroundTransparency = 1
-modeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-modeLabel.Font = Enum.Font.SourceSans
-modeLabel.TextSize = 16
-modeLabel.Text = "Range Mode:"
-modeLabel.Parent = screenGui
-
--- Range Mode Toggle Button
-local modeToggle = Instance.new("TextButton")
-modeToggle.Size = UDim2.new(0, 150, 0, 25)
-modeToggle.Position = UDim2.new(0, 10, 0, 125)
-modeToggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-modeToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-modeToggle.Font = Enum.Font.SourceSans
-modeToggle.TextSize = 16
-modeToggle.Text = "Behind"
-modeToggle.Parent = screenGui
-
--- Mode switching logic
-local rangeMode = "Behind" -- or "Circle"
-modeToggle.MouseButton1Click:Connect(function()
-	rangeMode = (rangeMode == "Behind") and "Circle" or "Behind"
-	modeToggle.Text = rangeMode
-end)
-
 -- Vars
 local enabled = false
 local cooldown = false
@@ -99,43 +70,41 @@ rangeBox.FocusLost:Connect(function()
 	end
 end)
 
--- Helpers
+-- Mode Toggle
+local mode = "Behind"
+local modeButton = Instance.new("TextButton")
+modeButton.Size = UDim2.new(0, 150, 0, 25)
+modeButton.Position = UDim2.new(0, 10, 0, 105)
+modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+modeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+modeButton.Font = Enum.Font.SourceSans
+modeButton.TextSize = 16
+modeButton.Text = "Mode: Behind"
+modeButton.Parent = screenGui
 
--- Fling to killer and return in same frame
-local function flingToKillerBackAndReturn(char, targetHRP)
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp or not targetHRP then return end
-
-	local originalPosition = hrp.Position
-	local originalVelocity = hrp.Velocity
-
-	local backDirection = -targetHRP.CFrame.LookVector
-	local flingVelocity = backDirection * 120
-
-	-- Apply velocity
-	hrp.Velocity = flingVelocity
-
-	-- Wait 1 physics frame
-	RunService.Heartbeat:Wait()
-
-	-- Restore position and velocity
-	hrp.CFrame = CFrame.new(originalPosition)
-	hrp.Velocity = originalVelocity
-end
-
-local function isInRange(hrp, targetHRP)
-	local toPlayer = (hrp.Position - targetHRP.Position)
-	local distance = toPlayer.Magnitude
-
-	if rangeMode == "Circle" then
-		return distance <= range
-	elseif rangeMode == "Behind" then
-		local direction = -targetHRP.CFrame.LookVector
-		local isBehind = toPlayer:Dot(direction) > 0.5
-		return distance <= range and isBehind
+modeButton.MouseButton1Click:Connect(function()
+	if mode == "Behind" then
+		mode = "Around"
+	else
+		mode = "Behind"
 	end
+	modeButton.Text = "Mode: " .. mode
+end)
 
-	return false
+-- Modified helper function
+local function isBehindTarget(hrp, targetHRP)
+	local distance = (hrp.Position - targetHRP.Position).Magnitude
+	if distance > range then
+		return false
+	end
+	
+	if mode == "Around" then
+		return true
+	else
+		local direction = -targetHRP.CFrame.LookVector
+		local toPlayer = (hrp.Position - targetHRP.Position)
+		return toPlayer:Dot(direction) > 0.5
+	end
 end
 
 -- Main loop
@@ -151,33 +120,54 @@ RunService.Heartbeat:Connect(function()
 		if killer and killer:FindFirstChild("HumanoidRootPart") then
 			local kHRP = killer.HumanoidRootPart
 
-			if isInRange(hrp, kHRP) and killer ~= lastTarget then
+			if isBehindTarget(hrp, kHRP) and killer ~= lastTarget then
 				cooldown = true
 				lastTarget = killer
 
-				-- Store original position & velocity
-				local originalPosition = hrp.Position
-				local originalVelocity = hrp.Velocity
+				-- Begin sum secs constant teleporting behind killer
+				local start = tick()
+				local didDagger = false
 
-				-- Teleport behind the killer
-				local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
-				hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
+				local connection
+				connection = RunService.Heartbeat:Connect(function()
+					if not (char and char.Parent and kHRP and kHRP.Parent) then
+						if connection then connection:Disconnect() end
+						return
+					end
+					local elapsed = tick() - start
+					if elapsed >= 0.5 then
+						if connection then connection:Disconnect() end
+						return
+					end
 
-				-- Fire dagger
-				daggerRemote:FireServer("UseActorAbility", "Dagger")
-                                wait(0.01)
-				-- Fling velocity backwards for 1 frame
-				local flingVelocity = -kHRP.CFrame.LookVector * 120
-				hrp.Velocity = flingVelocity
+					-- Constant TP behind killer
+					local behindPos = kHRP.Position - (kHRP.CFrame.LookVector * 0.3)
+					hrp.CFrame = CFrame.new(behindPos, behindPos + kHRP.CFrame.LookVector)
 
-				-- Wait 1 frame, then restore position/velocity
-				RunService.Heartbeat:Wait()
-				hrp.CFrame = CFrame.new(originalPosition)
-				hrp.Velocity = originalVelocity
+					-- Align look direction for sum sec (only once at the start)
+					if not didDagger then
+						didDagger = true
 
-				-- Start cooldown reset logic
+						-- Align to killer’s facing for sum sec
+						local faceStart = tick()
+						local faceConn
+						faceConn = RunService.Heartbeat:Connect(function()
+							if tick() - faceStart >= 0.7 or not kHRP or not kHRP.Parent then
+								if faceConn then faceConn:Disconnect() end
+								return
+							end
+							hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + kHRP.CFrame.LookVector)
+						end)
+
+						-- Dagger right after first TP and look
+						daggerRemote:FireServer("UseActorAbility", "Dagger")
+					end
+				end)
+
+				-- Wait and reset cooldown after leaving range
 				task.delay(2, function()
-					while isInRange(hrp, kHRP) do
+					RunService.Heartbeat:Wait()
+					while isBehindTarget(hrp, kHRP) do
 						RunService.Heartbeat:Wait()
 					end
 					lastTarget = nil
