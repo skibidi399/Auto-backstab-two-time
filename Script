@@ -70,13 +70,41 @@ rangeBox.FocusLost:Connect(function()
 	end
 end)
 
--- Helper: Check if player is behind killer
+-- Mode Toggle
+local mode = "Behind"
+local modeButton = Instance.new("TextButton")
+modeButton.Size = UDim2.new(0, 150, 0, 25)
+modeButton.Position = UDim2.new(0, 10, 0, 105)
+modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+modeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+modeButton.Font = Enum.Font.SourceSans
+modeButton.TextSize = 16
+modeButton.Text = "Mode: Behind"
+modeButton.Parent = screenGui
+
+modeButton.MouseButton1Click:Connect(function()
+	if mode == "Behind" then
+		mode = "Around"
+	else
+		mode = "Behind"
+	end
+	modeButton.Text = "Mode: " .. mode
+end)
+
+-- Modified helper function
 local function isBehindTarget(hrp, targetHRP)
-	local direction = -targetHRP.CFrame.LookVector
-	local toPlayer = (hrp.Position - targetHRP.Position)
-	local distance = toPlayer.Magnitude
-	local isBehind = toPlayer:Dot(direction) > 0.5
-	return distance <= range and isBehind
+	local distance = (hrp.Position - targetHRP.Position).Magnitude
+	if distance > range then
+		return false
+	end
+	
+	if mode == "Around" then
+		return true
+	else
+		local direction = -targetHRP.CFrame.LookVector
+		local toPlayer = (hrp.Position - targetHRP.Position)
+		return toPlayer:Dot(direction) > 0.5
+	end
 end
 
 -- Main loop
