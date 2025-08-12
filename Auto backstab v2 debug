@@ -105,7 +105,14 @@ local function isBehindTarget(hrp, targetHRP)
 end
 
 -- Main loop
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
+    local cooldownText = game:GetService("Players").LocalPlayer
+    .PlayerGui.MainUI:WaitForChild("AbilityContainer").Dagger.CooldownTime.Text
+
+    if tonumber(cooldownText) then
+        return -- means dagger is on cooldown
+    end
+    
 	if not enabled or cooldown then return end
 
 	local char = lp.Character
@@ -150,12 +157,15 @@ RunService.Heartbeat:Connect(function()
 					if mode == "Behind" then
 						targetPos = predictedPos - (kHRP.CFrame.LookVector * 0.3)
 					elseif mode == "Around" then
+						local lookVec = kHRP.CFrame.LookVector
+						local rightVec = kHRP.CFrame.RightVector
 						local rel = (hrp.Position - kHRP.Position)
-						if rel.Magnitude > 0.1 then
-							targetPos = predictedPos + rel.Unit * 0.3
-						else
-							targetPos = predictedPos
-						end
+						local lateralSpeed = killerVelocity:Dot(rightVec)
+						
+						local baseOffset = (rel.Magnitude > 0.1) and rel.Unit * 0.3 or Vector3.new()
+						local lateralOffset = rightVec * lateralSpeed * 0.3
+
+						targetPos = predictedPos + baseOffset + lateralOffset
 					end
 
 					-- Constant live TP
@@ -185,12 +195,15 @@ RunService.Heartbeat:Connect(function()
 							if mode == "Behind" then
 								liveTargetPos = livePredictedPos - (kHRP.CFrame.LookVector * 0.3)
 							elseif mode == "Around" then
+								local lookVec = kHRP.CFrame.LookVector
+								local rightVec = kHRP.CFrame.RightVector
 								local liveRel = (hrp.Position - kHRP.Position)
-								if liveRel.Magnitude > 0.1 then
-									liveTargetPos = livePredictedPos + liveRel.Unit * 0.3
-								else
-									liveTargetPos = livePredictedPos
-								end
+								local liveLateralSpeed = liveVelocity:Dot(rightVec)
+								
+								local baseOffset = (liveRel.Magnitude > 0.1) and liveRel.Unit * 0.3 or Vector3.new()
+								local lateralOffset = rightVec * liveLateralSpeed * 0.3
+
+								liveTargetPos = livePredictedPos + baseOffset + lateralOffset
 							end
 							hrp.CFrame = CFrame.new(liveTargetPos, liveTargetPos + kHRP.CFrame.LookVector)
 						end)
