@@ -79,7 +79,7 @@ modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 modeButton.TextColor3 = Color3.fromRGB(255, 255, 255) 
 modeButton.Font = Enum.Font.SourceSans 
 modeButton.TextSize = 16 
-modeButton.Text = "Range Mode: Behind" 
+modeButton.Text = "Mode: Behind" 
 modeButton.Parent = screenGui
 
 modeButton.MouseButton1Click:Connect(function() 
@@ -88,7 +88,7 @@ modeButton.MouseButton1Click:Connect(function()
     else 
         mode = "Behind" 
     end 
-    modeButton.Text = "Range Mode: " .. mode 
+    modeButton.Text = "Mode: " .. mode 
 end)
 
 -- Match Facing Toggle (only for Legit mode)
@@ -136,6 +136,36 @@ attackButton.MouseButton1Click:Connect(function()
     facingButton.Visible = (attackType == "Legit")
 end)
 
+
+-- Hide Button
+local hideButton = Instance.new("TextButton")
+hideButton.Size = UDim2.new(0, 50, 0, 40)
+hideButton.Position = UDim2.new(0, 165, 0, 10) -- right next to Backstab toggle
+hideButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+hideButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+hideButton.Font = Enum.Font.SourceSansBold
+hideButton.TextSize = 20
+hideButton.Text = "Hide"
+hideButton.Parent = screenGui
+
+local guiHidden = false
+local guiElements = {}
+
+-- Store all GUI elements except toggle and hideButton
+for _, obj in ipairs(screenGui:GetChildren()) do
+	if obj ~= hideButton then
+		table.insert(guiElements, obj)
+	end
+end
+
+hideButton.MouseButton1Click:Connect(function()
+	guiHidden = not guiHidden
+	hideButton.Text = guiHidden and "Show" or "Hide"
+
+	for _, obj in ipairs(guiElements) do
+		obj.Visible = not guiHidden
+	end
+end)
 
 
 -- Animation IDs for Counter mode
