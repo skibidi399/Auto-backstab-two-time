@@ -79,7 +79,7 @@ modeButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 modeButton.TextColor3 = Color3.fromRGB(255, 255, 255) 
 modeButton.Font = Enum.Font.SourceSans 
 modeButton.TextSize = 16 
-modeButton.Text = "Mode: Behind" 
+modeButton.Text = "Range Mode: Behind" 
 modeButton.Parent = screenGui
 
 modeButton.MouseButton1Click:Connect(function() 
@@ -88,7 +88,7 @@ modeButton.MouseButton1Click:Connect(function()
     else 
         mode = "Behind" 
     end 
-    modeButton.Text = "Mode: " .. mode 
+    modeButton.Text = "Range Mode: " .. mode 
 end)
 
 -- Match Facing Toggle (only for Legit mode)
