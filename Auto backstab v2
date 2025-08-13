@@ -91,7 +91,82 @@ modeButton.MouseButton1Click:Connect(function()
     modeButton.Text = "Mode: " .. mode 
 end)
 
--- Helper function 
+-- Match Facing Toggle (only for Legit mode)
+local matchFacing = false
+local facingButton = Instance.new("TextButton")
+facingButton.Size = UDim2.new(0, 150, 0, 25)
+facingButton.Position = UDim2.new(0, 10, 0, 165) -- under Backstab Type button
+facingButton.BackgroundColor3 = Color3.fromRGB(110, 110, 110)
+facingButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+facingButton.Font = Enum.Font.SourceSans
+facingButton.TextSize = 16
+facingButton.Text = "Legit Aimbot: OFF"
+facingButton.Visible = false -- hidden until Legit mode
+facingButton.Parent = screenGui
+
+facingButton.MouseButton1Click:Connect(function()
+    matchFacing = not matchFacing
+    facingButton.Text = "Legit Aimbot: " .. (matchFacing and "ON" or "OFF")
+    facingButton.BackgroundColor3 = matchFacing and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(110, 110, 110)
+end)
+
+-- Attack type button (Normal / Counter)
+local attackType = "Normal"
+local attackButton = Instance.new("TextButton")
+attackButton.Size = UDim2.new(0, 150, 0, 25)
+attackButton.Position = UDim2.new(0, 10, 0, 135) -- under mode button
+attackButton.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+attackButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+attackButton.Font = Enum.Font.SourceSans
+attackButton.TextSize = 16
+attackButton.Text = "Backstab Type: Normal"
+attackButton.Parent = screenGui
+
+attackButton.MouseButton1Click:Connect(function()
+    if attackType == "Normal" then
+        attackType = "Counter"
+    elseif attackType == "Counter" then
+        attackType = "Legit"
+    elseif attackType == "Legit" then
+        attackType = "Normal"
+    end
+    attackButton.Text = "Backstab Type: " .. attackType
+
+    -- Show Match Facing button only if Legit
+    facingButton.Visible = (attackType == "Legit")
+end)
+
+
+
+-- Animation IDs for Counter mode
+local counterAnimIDs = {
+	"126830014841198", "126355327951215", "121086746534252", "18885909645",
+	"98456918873918", "105458270463374", "83829782357897", "125403313786645",
+	"118298475669935", "82113744478546", "70371667919898", "99135633258223",
+	"97167027849946", "109230267448394", "139835501033932", "126896426760253",
+	"109667959938617", "126681776859538", "129976080405072", "121293883585738",
+	"81639435858902", "137314737492715", "92173139187970"
+}
+
+
+-- Helpers
+local function killerPlayingCounterAnim(killer)
+    local humanoid = killer:FindFirstChildOfClass("Humanoid")
+    if not humanoid or not humanoid:FindFirstChildOfClass("Animator") then return false end
+
+    for _, track in ipairs(humanoid.Animator:GetPlayingAnimationTracks()) do
+        if track.Animation and track.Animation.AnimationId then
+            local animIdNum = track.Animation.AnimationId:match("%d+")
+            for _, id in ipairs(counterAnimIDs) do
+                if tostring(animIdNum) == id then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function isBehindTarget(hrp, targetHRP) 
     local distance = (hrp.Position - targetHRP.Position).Magnitude 
     if distance > range then return false end
@@ -104,20 +179,75 @@ local function isBehindTarget(hrp, targetHRP)
     end
 end
 
--- Main loop
-RunService.RenderStepped:Connect(function()
-	if not enabled or cooldown then return end
 
+
+-- keep daggerCooldownText up-to-date automatically
+local function refreshDaggerRef()
+	local mainui = lp:FindFirstChild("PlayerGui"):FindFirstChild("MainUI")
+	if mainui and mainui:FindFirstChild("AbilityContainer") then
+		local dagger = mainui.AbilityContainer:FindFirstChild("Dagger")
+		if dagger and dagger:FindFirstChild("CooldownTime") then
+			daggerCooldownText = dagger.CooldownTime
+			return
+		end
+	end
+	daggerCooldownText = nil
+end
+
+-- reconnect whenever relevant descendants change
+lp.PlayerGui.DescendantAdded:Connect(refreshDaggerRef)
+lp.PlayerGui.DescendantRemoving:Connect(function(obj)
+	if obj == daggerCooldownText then
+		daggerCooldownText = nil
+	end
+end)
+
+refreshDaggerRef()
+
+RunService.RenderStepped:Connect(function()
+    if not daggerCooldownText or not daggerCooldownText.Parent then
+        return
+    end
+    
+
+    if tonumber(daggerCooldownText.Text) then
+        return -- still on cooldown
+    end
+
+    if not enabled or cooldown then return end
+    
 	local char = lp.Character
 	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
 	local hrp = char.HumanoidRootPart
 	local stats = game:GetService("Stats")
-
+	
 	for _, name in ipairs(killerNames) do
 		local killer = killersFolder:FindFirstChild(name)
 		if killer and killer:FindFirstChild("HumanoidRootPart") then
 			local kHRP = killer.HumanoidRootPart
 
+            if attackType == "Legit" then
+                local dist = (kHRP.Position - hrp.Position).Magnitude
+                if dist <= range then
+                    -- Optional facing alignment
+                    if matchFacing then
+                        hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + kHRP.CFrame.LookVector)
+                    end
+                    if mode == "Behind" then
+                        local directionToTarget = (kHRP.Position - hrp.Position).Unit
+                        local dot = hrp.CFrame.LookVector:Dot(directionToTarget)
+                        if dot > 0.6 then -- target is in front
+                            return
+                        end
+                    end
+                    daggerRemote:FireServer("UseActorAbility", "Dagger")
+                end
+                return -- skip TP logic
+            end
+
+            if attackType == "Counter" and not killerPlayingCounterAnim(killer) then
+            	continue
+            end
 			if isBehindTarget(hrp, kHRP) and killer ~= lastTarget then
 				cooldown = true
 				lastTarget = killer
@@ -214,7 +344,7 @@ RunService.RenderStepped:Connect(function()
 					lastTarget = nil
 					cooldown = false
 				end)
-
+				
 				break
 			end
 		end
